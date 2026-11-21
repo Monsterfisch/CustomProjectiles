@@ -1,0 +1,15 @@
+meta:
+  version: 1.0.0
+options:
+- name: projectile_config_file_selector
+  category:
+  - '{{balance_changes}}'
+  display: FileInput
+  text: '{{config_file}}'
+  tooltip: '{{config_help}}'
+  url: custom-projectiles.projectile_config_file_selector
+  contents:
+    type: string
+    value: ''
+    filter: files
+    generalizeExtensionPaths: true
