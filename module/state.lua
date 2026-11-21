@@ -40,63 +40,87 @@ function M.new(blocks, config, profile_count, rebuild)
     end
     -- Map Extensions calls this before restoring any extension. Direct restores
     -- use the same validator; no pending state is retained between callbacks.
+    -- Loading never fails because of changed settings, an older save format or a
+    -- different unit limit (a save/map made in Crusader has 2500 unit slots,
+    -- Extreme 10000): whatever no longer fits is reset to zero and logged.
+    -- Only an explicit allow_config_changes_on_load: false keeps the strict check.
     function state:validate(handle)
         local present = handle:exists('format')
         if not present and not handle.required then return end
-        assert(present and handle:get('format') == '5', '[custom-projectiles] unsupported saved state format; start a new match with this version')
+        local notes = {}
+        if not present or handle:get('format') ~= '5' then
+            notes[1] = 'saved state is from an older version; projectile timers start fresh'
+            return {fresh=true, notes=notes}
+        end
         local saved_config = handle:get('config')
-        assert(type(saved_config) == 'string' and saved_config:sub(1,1) == '{' and saved_config:sub(-1) == '}',
-            '[custom-projectiles] invalid saved projectile configuration')
         local changed = saved_config ~= self.config
         assert(not changed or self.allow_config_changes,
             '[custom-projectiles] saved projectile settings differ; restore the settings used for this save or enable allow_config_changes_on_load')
+        local reset_visuals = false
         if changed then
+            notes[#notes+1] = 'projectile settings changed since this save; firing timers were reset'
             if handle:exists('assets') then
-                assert(handle:get('assets') == self.assets,
-                    '[custom-projectiles] custom projectile/decorations changed; restore their definitions for this save')
+                reset_visuals = handle:get('assets') ~= self.assets
             else
-                -- Legacy saves have no asset fingerprint. Only an empty
-                -- visual state proves their IDs cannot be reinterpreted.
-                assert(no_assets, '[custom-projectiles] legacy save has no asset identity; load once with its original config and resave before editing')
+                reset_visuals = not no_assets
             end
         end
-        local pending = {reconfigure=changed}
+        local pending = {reconfigure=changed, notes=notes}
         for i, block in ipairs(self.blocks) do
             local name = block[1] .. '.bin'
-            assert(handle:exists(name), '[custom-projectiles] missing saved state: ' .. name)
-            local bytes = handle:get(name)
-            assert(type(bytes) == 'string' and #bytes == block[3], '[custom-projectiles] invalid saved state: ' .. name)
-            if block[4] then
-                assert(bytes==core.readString(block[2],block[3]),
-                    '[custom-projectiles] saved graphics-slot layout differs; restore the same extensions and sprite configuration')
+            local bytes = handle:exists(name) and handle:get(name) or nil
+            if type(bytes) ~= 'string' then
+                bytes = nil
+                if not block[4] then notes[#notes+1] = 'missing ' .. name .. '; reset' end
+            elseif block[4] then
+                -- Graphics-slot layouts are rebuilt from this config, never restored.
+                if bytes ~= core.readString(block[2], block[3]) then reset_visuals = true end
+                bytes = nil
+            elseif #bytes ~= block[3] then
+                notes[#notes+1] = name .. ' was saved with ' .. #bytes .. ' bytes, now ' .. block[3] .. ' (different unit limit); resized'
+                if #bytes < block[3] then
+                    bytes = bytes .. string.rep('\0', block[3] - #bytes)
+                else
+                    bytes = bytes:sub(1, block[3])
+                end
             end
-            if changed and not handle:exists('assets') and (retained[block[1]] and block[1] ~= 'seed' or block[4]) then
-                assert(bytes == string.rep('\0', #bytes),
-                    '[custom-projectiles] legacy save contains custom graphics; load with its original config and resave before editing')
-            end
-            if limits[block[1]] and not (changed and block[1] == 'profile') then
-                for offset = 1, #bytes, 4 do
+            if bytes and limits[block[1]] and not (changed and block[1] == 'profile') then
+                for offset = 1, #bytes - 3, 4 do
                     local a,b,c,d = bytes:byte(offset, offset+3)
-                    local value = a + b*256 + c*65536 + d*16777216
-                    assert(value <= limits[block[1]], '[custom-projectiles] out-of-range saved state: ' .. name)
+                    if a + b*256 + c*65536 + d*16777216 > limits[block[1]] then
+                        notes[#notes+1] = 'out-of-range values in ' .. name .. '; reset'
+                        bytes = nil
+                        break
+                    end
                 end
             end
             pending[i] = bytes
         end
+        if reset_visuals then
+            notes[#notes+1] = 'custom projectile/decoration graphics changed; flying projectiles and decorations use their default look'
+        end
+        pending.reset_visuals = reset_visuals
         return pending
     end
     function state:deserialize(handle)
         local pending = self:validate(handle)
         if not pending then self:initialize(); return end
+        for _, note in ipairs(pending.notes) do log(WARNING, '[custom-projectiles] ' .. note) end
+        if pending.fresh then self:initialize(); return end
         for i, block in ipairs(self.blocks) do
-            if pending.reconfigure and not retained[block[1]] and not block[4] then
+            if block[4] then
+                -- rebuilt by rebuild() below
+            elseif pending[i] == nil
+                or (pending.reconfigure and not retained[block[1]])
+                or (pending.reset_visuals and retained[block[1]] and block[1] ~= 'seed') then
                 core.setMemory(block[2], 0, block[3])
-            elseif not block[4] then
+            else
                 local bytes = {}
                 for j = 1, #pending[i] do bytes[j] = pending[i]:byte(j) end
                 core.writeBytes(block[2], bytes)
             end
         end
+        if pending[1] == nil then core.writeInteger(self.blocks[1][2], 0x1D872B41) end
         if rebuild then rebuild() end
     end
     return state

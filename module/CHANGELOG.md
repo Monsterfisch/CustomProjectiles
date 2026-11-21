@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.18
+
+- Saves and maps always load after projectile settings change. Whatever no longer
+  fits is reset and logged as a warning instead of refusing the load: older save
+  formats, missing or out-of-range blocks, changed custom graphics, and state saved
+  with a different unit limit (Crusader 2500 vs Extreme 10000 slots), which is resized.
+  Only `allow_config_changes_on_load: false` keeps the strict check.
+
+## 1.8.17
+
+- Start alongside Smarter Walls (unit update loop), Improved Siegeengines (entity update) and Improved Tunnelers (toolbar handler): when one of them already hooks a spot this module needs, chain onto its hook instead of refusing to start.
+
 ## 1.8.16 (provisional test candidate)
 
 - Enforce an explicit range on supported native shooters' manual acquisition

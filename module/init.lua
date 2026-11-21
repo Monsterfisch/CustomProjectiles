@@ -101,7 +101,17 @@ for _, cfg in pairs(config.units) do
 end
 
 -- Inside UnitsState::updateUnits, reached once per tick for every living unit.
-local unit_tick_addr = locate("83 C2 01 89 16 8B 15 ? ? ? ? 69 D2 90 04 00 00 33 C9 66 89 8C 32 AE 09 00 00")
+-- Its first 5 bytes (`add edx,1` + `mov [esi],edx`) may already be a jump from another
+-- module (Smarter Walls hooks the same spot), so find it by what follows and chain on.
+local unit_tick_addr = locate("8B 15 ? ? ? ? 69 D2 90 04 00 00 33 C9 66 89 8C 32 AE 09 00 00") - 5
+local unit_tick_chain
+if core.readByte(unit_tick_addr) % 256 == 0xE9 then
+    unit_tick_chain = (unit_tick_addr + 5 + core.readInteger(unit_tick_addr + 1)) % 4294967296
+else
+    assert(core.readInteger(unit_tick_addr) % 4294967296 == 0x8901C283
+        and core.readByte(unit_tick_addr + 4) % 256 == 0x16,
+        '[custom-projectiles] unsupported executable or conflicting module at the unit update loop')
+end
 local animation_addr, release_cycles, catapult_rest, trebuchet_rest, horse_addr, hunter_addr, hunter_script, hunter_sound, sound_this, hunter_end, face_point, face_unit
 if native_cadence then
     animation_addr = locate('A1 ? ? ? ? 69 C0 90 04 00 00 01 9C 30 54 06 00 00')
@@ -191,10 +201,17 @@ assert(core.readSmallInteger(unit_tick_addr + 0x3A2) % 65536 == 0xFA81
 local unit_capacity = core.readInteger(unit_tick_addr + 0x3A4)
 assert(unit_capacity == (data.version.isExtreme() and 10000 or 2500),
     '[custom-projectiles] unsupported unit-array capacity modification')
-local spawn_site, entity_site, entity_array
+local spawn_site, entity_site, entity_array, entity_chain
 if next(config.projectiles or {}) or next(config.decorations or {}) then
     spawn_site = locate('83 EC 08 53 8B 5C 24 34 83 FB 2B 56 8B F1')
-    entity_site = locate('51 53 55 56 8B F1 8B 0D ? ? ? ? B8 67 66 66 66 F7 E9')
+    -- Improved Siegeengines hooks the same 6 byte prologue (jmp + nop); chain onto it then.
+    local plain, site = pcall(locate, '51 53 55 56 8B F1 8B 0D ? ? ? ? B8 67 66 66 66 F7 E9')
+    if plain then
+        entity_site = site
+    else
+        entity_site = locate('E9 ? ? ? ? 90 8B 0D ? ? ? ? B8 67 66 66 66 F7 E9')
+        entity_chain = (entity_site + 5 + core.readInteger(entity_site + 1)) % 4294967296
+    end
     -- The dispatcher loads EntityState as `this` immediately before calling
     -- the resolved native spawner. Decode both operands from that call site.
     local call_site = locate('52 51 50 B9 ? ? ? ? E8 ? ? ? ? 0F BF 86 EC 08 00 00 85 C0 5F 5E 5B 74 0F 69')
@@ -205,6 +222,7 @@ if next(config.projectiles or {}) or next(config.decorations or {}) then
     entity_array = entity_state + 20
 end
 return {locate=locate, fire=fire_projectile_addr, acquire=acquire_target_addr, tick=unit_tick_addr,
+    tickChain=unit_tick_chain,
     prepareTarget=prepare_target_addr,
     priorityGate=priority_gate, priorityGateContinue=priority_gate_continue,
     priorityReject=priority_reject, priorityScore=priority_score,
@@ -220,7 +238,7 @@ return {locate=locate, fire=fire_projectile_addr, acquire=acquire_target_addr, t
     rows=tile_rows_addr, flags=tile_flags_addr, terrain=terrain_height_addr,
     teams=team_table_addr, buildings=building_base_addr, aic=aic_array_base,
     playerAic=player_aic_addr, cow=aic_cow_addr, units=unit_array_base,
-    spawn=spawn_site, entityUpdate=entity_site, entityArray=entity_array,
+    spawn=spawn_site, entityUpdate=entity_site, entityChain=entity_chain, entityArray=entity_array,
     this=unit_state_this, current=current_unit_id_addr, capacity=unit_capacity}
 end
 
@@ -739,7 +757,16 @@ local function install(config)
 
     -- Tick hook: exactly 5 bytes (`add edx,1` + `mov [esi],edx`), replayed at the end.
     values.RESUME = unit_tick_addr + 5
-    local tick_hook = assemble_blob(templates.tick_hook_code, values)
+    local tick_script = templates.tick_hook_code
+    if native.tickChain then
+        -- Another module's hook owns the original 5 bytes and replays them itself.
+        values.RESUME = native.tickChain
+        local replay = "    add edx, 1\n    mov [esi], edx\n    jmp RESUME"
+        local a, b = tick_script:find(replay, 1, true)
+        assert(a, '[custom-projectiles] unit tick hook tail not found')
+        tick_script = tick_script:sub(1, a - 1) .. "    jmp RESUME" .. tick_script:sub(b + 1)
+    end
+    local tick_hook = assemble_blob(tick_script, values)
 
     local ground_hook, accuracy_hook
     if native.groundAim then
@@ -782,7 +809,13 @@ local function install(config)
         values.SPAWNORIGINAL=assemble_blob(runtime.spawn_original,values)
         spawn_hook=assemble_blob(runtime.spawn,values)
         values.ENTITYRESUME=entity_site+6
-        values.ENTITYORIGINAL=assemble_blob(runtime.update_original,values)
+        if native.entityChain then
+            -- Another module's hook replays the prologue; calling it is calling the original.
+            values.ENTITYRESUME=native.entityChain
+            values.ENTITYORIGINAL=assemble_blob('spriteUpdateOriginal:' .. NEWLINE .. 'jmp ENTITYRESUME',values)
+        else
+            values.ENTITYORIGINAL=assemble_blob(runtime.update_original,values)
+        end
         entity_hook=assemble_blob(runtime.update,values)
     end
 

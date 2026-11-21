@@ -98,6 +98,20 @@ function M.protocol(by_id, invoker, place)
     }
 end
 
+-- The toolbar button handler. Improved Tunnelers puts a 9 byte jump (jmp + 4 nops) over
+-- its first bytes; then hook a small stub that jumps on to that hook instead.
+local function action_site(locate)
+    local plain,site=pcall(locate,'53 33 DB 39 1D ? ? ? ? 0F 85 ? ? ? ? 39 1D ? ? ? ? 0F 85 ? ? ? ? A1 ? ? ? ? 8B C8')
+    if plain then return site end
+    site=locate('E9 ? ? ? ? 90 90 90 90 0F 85 ? ? ? ? 39 1D ? ? ? ? 0F 85 ? ? ? ? A1 ? ? ? ? 8B C8')
+    local chain=(site+5+core.readInteger(site+1))%4294967296
+    local stub=core.allocateCode(14)
+    core.writeCode(stub,{0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,0x90,
+        0xE9,core.itob(core.getRelativeAddress(stub+9,chain,-5))})
+    core.writeCode(site,{0xE9,core.itob(core.getRelativeAddress(site,stub,-5))})
+    return stub
+end
+
 function M.resolve(locate)
     local command=locate('A1 ? ? ? ? 83 EC 08 83 F8 01 C7 05 ? ? ? ? 09 00 00 00 0F 85 ? ? ? ? 6A 00 50 50')
     local function relative(offset)
@@ -123,7 +137,7 @@ function M.resolve(locate)
         gameMode=core.readInteger(command+0x197), gold=core.readInteger(funds+8),
         x=core.readInteger(command+0x35), y=core.readInteger(command+0x4A),
         kind=core.readInteger(command+0x74), queue=queue, valid=validation, height=height,
-        action=locate('53 33 DB 39 1D ? ? ? ? 0F 85 ? ? ? ? 39 1D ? ? ? ? 0F 85 ? ? ? ? A1 ? ? ? ? 8B C8'),
+        action=action_site(locate),
         filter=near+0x27, filterResume=near+0x2D, filterNext=near+0x64,
     }
 end
