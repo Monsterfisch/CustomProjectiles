@@ -1,5 +1,109 @@
 # Validation — unreleased work
 
+## 1.8.11 native automatic target score, 28 September
+
+The 1.8.10 flat-rank test candidate is superseded. Normal Crusader and Extreme
+1.41 x86 tests execute the production Lua/FASM hooks against both reference PE
+images. Focused target-policy, binding and configuration tests passed (28 tests
+before the additional scheduled-list, formerly non-shooting-unit and decoded
+range-table cases, which also passed individually). The complete suite passed
+**149 tests in 1048.561 seconds** after the runtime hook implementation; later
+variable-name-only cleanup and added cases passed focused tests. They cover Monk/Priest
+distance bias, native/manual order precedence, exact versus rounded range,
+continued selection after an out-of-range candidate, ordinary acquisition
+without an interval, decoration-only profiles, unchanged module RNG and
+effective-profile firing state, conditional hook installation, occupied sites
+and UCP AOB-cache resolution.
+
+All 23 GUI component/archive checks pass. The 1.8.11 ZIP is deterministic and
+contains the schema, full vanilla reference and nine localized descriptions.
+One x86 probe with 1,000 eligible candidates took about 0.01 seconds for the
+opted-in Catapult selection on each reference image; this is a harness
+measurement, not crowded live-game performance acceptance.
+
+An isolated test game was prepared with 1.8.11 and GM owner 0.3.1. The current
+Computer Use runtime returned `Native app bindings are unavailable for windows`
+before game launch, so no rendered gameplay or installed launcher result is
+claimed. The desktop queue slot was released immediately. Paired multiplayer,
+save/replay and other executable variants also remain unverified.
+
+## 1.8.10 flat-rank prototype (superseded), 28 September
+
+These historical results refer to the withdrawn flat-rank prototype, not the
+unreleased native-score correction. The complete Python/Lua/x86 suite passed **144 tests in 944.889 seconds** on the
+normal Crusader and Extreme 1.41 reference executables. New tests verify
+Monk/Priest ranks against nearer targets, exact range rejection, deterministic
+distance/ID fallback, manual-order precedence, unchanged RNG, wall `native`
+clearing, schema bounds and all 77 vanilla unit entries. The existing cluster,
+random-volley, native acquisition, save-continuation and sprite tests also pass.
+The 23 GUI component/archive tests pass, including all nine locale catalogs and
+the standard file selector under Legacy Balance Changes. The matching
+Reconquista YAML validates against the generated schema.
+
+Without a rank map, the generated `scanUnit` machine code is byte-for-byte
+identical to the 1.8.9 branch (351 bytes; SHA-256
+`df0f70dae7b8baa1d8ada92eec9a94e90972d727e8b805a03c0199b8fd8bb731`).
+The rank map adds no hook, scan, target cache, RNG call, per-frame allocation
+or saved block. Native manual acquisition, projectile allocation, physics,
+damage and cleanup retain their owners. This is a provisional test candidate:
+actual mixed Monk/Priest gameplay, installed GUI checks, crowded-match timing,
+paired multiplayer/replay and wider executable variants remain unverified.
+
+## 1.8.9 active visual indices, 28 September
+
+The existing projectile spawn and entity-update hooks now visit only active
+custom projectile/decor IDs; decoration-grid updates clear only touched cells.
+Scratch indices reconstruct after new-world/load and placement, outside the
+saved format-5 state. Focused normal/Extreme x86 tests cover stale/reused IDs,
+render visit counts, moved/dead decorations, native equal-priority ordering,
+and save continuation. A two-decoration update remains under 1000 emulated
+instructions. The complete regression suite passed **140 tests** in 918.294
+seconds before the final visual-binding correction. After that correction,
+all eight sprite/resource and twelve decoration regressions passed; these
+include a new fail-closed spawner-call/pointer/ambiguity test on both images.
+The binding is decoded with UCP's `core.AOBScan` and cross-checked against the
+resolved native spawner and decoration receiver. No live rendered-game,
+multiplayer, replay or crowded-match performance pass is claimed yet.
+
+## 1.8.8 owner loading refactor, 27 September
+
+The GM owner now validates complete inherited sheets and hashes the exact bytes
+it loaded before native preparation. The consumer uses that owner API once and
+no longer opens, parses or hashes GM1 files. Owner host tests cover six admission
+scenarios, malformed headers/offsets/tokens, the exact SHA-256 fixture digest
+and all six original projectile/decorative sheets from a local Extreme install.
+The Win32 DLL builds with MSVC v143. Owner AOB bindings pass on local, Polish
+and EFIGS normal/Extreme fixture pairs; module component GUI/archive checks
+pass (23). The module's framework-cache binding and decoration-signature checks
+also pass on the Polish and EFIGS normal/Extreme pairs. These checks do not establish rendered
+gameplay or multiplayer/save/replay acceptance; 1.8.8 remains provisional.
+
+The complete module Python/Lua/x86 regression suite passed **137 tests** in
+915.831 seconds on the local normal/Extreme reference executables. It includes
+the new owner rejection/cleanup test and existing firing, targeting, range,
+turning, decoration, native save continuation and configuration cases.
+
+## 1.8.7 provisional source and archive, 27 September
+
+The normal/Extreme reference-EXE harness completed 135 tests without failures
+after the accepted-aim and dead/recycled-target correction. A subsequent
+single-path edit refreshes the existing target list for explicitly random
+native volleys; 41 final turning, range, cluster and cadence tests passed, plus
+focused normal/Extreme random-volley and manual-order reruns after restoring
+the accepted target ID/UID.
+All 23 GUI component/archive checks passed, and the module ZIP built with 47
+files and nine locale catalogs. These checks do not constitute an actual game
+GUI or rendered-game pass.
+
+The isolated live test game was prepared with projectile 1.8.7, GM owner 0.3.0
+and Fixed Engineers 0.2.0, then restored to its previous configuration. The
+connected Windows computer-use host returned `Native app bindings are
+unavailable for windows` before launch; no in-game 1.8.7 result is claimed.
+The desktop queue slot was released. Direct enemy-click movement plus aim,
+custom sprites, build-menu placement, multiplayer and replay still need
+actual-game acceptance. GM owner PR #7, entity-lifecycle issue #9 and threat
+priority issue #10 remain open.
+
 ## Catapult lowered pause, 1.8.6
 
 All **106 Python/Lua/x86 tests passed** (750.162 seconds), together with all
